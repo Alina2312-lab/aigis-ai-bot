@@ -75,14 +75,24 @@ app.post('/webhook/instagram', async (req, res) => {
 });
 
 async function sendInstagramReply(recipientId, textToSend) {
-    if (!INSTAGRAM_PAGE_ACCESS_TOKEN) return;
+    const token = process.env.INSTAGRAM_PAGE_ACCESS_TOKEN;
+    if (!token) {
+        console.error("Ошибка: Токен INSTAGRAM_PAGE_ACCESS_TOKEN не найден в настройках Render!");
+        return;
+    }
     try {
-        await fetch(`https://facebook.com{INSTAGRAM_PAGE_ACCESS_TOKEN}`, {
+        const url = `https://facebook.com{token}`;
+        await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ recipient: { id: recipientId }, message: { text: textToSend } })
+            body: JSON.stringify({ 
+                recipient: { id: recipientId }, 
+                message: { text: textToSend } 
+            })
         });
-    } catch (err) { console.error("Ошибка Instagram:", err); }
+        console.log("✅ Автоответ успешно отправлен хейтеру в Instagram Direct!");
+    } catch (err) { 
+        console.error("Ошибка отправки в Instagram:", err); 
+    }
 }
-
 app.listen(PORT, () => { console.log(`🚀 Сервер Aigis в онлайне на порту ${PORT}`); });
