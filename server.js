@@ -105,8 +105,8 @@ async function checkTextToxicity(userText) {
     console.log("ORIGINAL:", userText);
     console.log("NORMALIZED:", cleanText);
 
-    const hatePatterns = [
-        // Английский (с учётом контекста — не блокирует "I hate homework")
+        const hatePatterns = [
+        // Английский (латиница поддерживает \b)
         /\bi hate you\b/i,
         /\byou are (stupid|ugly|worthless|pathetic|a loser|an idiot|a moron)\b/i,
         /\bnobody likes you\b/i,
@@ -114,20 +114,17 @@ async function checkTextToxicity(userText) {
         /\bshut up\b/i,
         /\bkill yourself\b/i,
 
-        // Русский
-        /\bты\s+(тупой|тупая|тупое|урод|уродина|ничтожество|дура|дурак)\b/i,
-        /\b(тупой|тупая|тупое|тупым|тупыми)\b/i,
-        /\b(идиот|идиотка|дебил|дебилка|придурок|кретин)\b/i,
-        /\bникому ты не нужен\b/i,
-        /\bтебя никто не любит\b/i,
-        /\bзаткнись\b/i,
+        // Русский (БЕЗ \b, так как \b в JS не работает с кириллицей!)
+        /(^|\s)(ты\s+)?(тупой|тупая|тупое|урод|уродина|ничтожество|дура|дурак|дурында)(\s|$)/i,
+        /(^|\s)(идиот|идиотка|дебил|дебилка|придурок|кретин|мразь|тварь|лох|чмо)(\s|$)/i,
+        /никому ты не нужен/i,
+        /тебя никто не любит/i,
+        /заткнись/i,
 
-        // Казахский
-        /\bсен\s+(ақымақ|керексізсің|малсың)\b/i,
-        /\b(ақымақ|мал|көтіңді|қотақбас)\b/i
+        // Казахский (БЕЗ \b, с поддержкой казахских букв)
+        /(^|\s)(сен\s+)?(ақымақ|акымак|керексізсің|малсың|мал|көтіңді|қотақбас|котакбас|мамбет|щещен|шешен)(\s|$)/i
     ];
 
-    // Проверяем и фразовые паттерны, и слова из динамического словаря (включая подгруженные из сети)
     const patternDetected = hatePatterns.some(pattern => pattern.test(cleanText));
     const dictionaryDetected = wordsArray.some(word => word.length >= 4 && dynamicDictionary.has(word)) ||
                                baseTriggers.some(trigger => trigger.length >= 4 && cleanText.includes(trigger));
@@ -135,6 +132,7 @@ async function checkTextToxicity(userText) {
     const localDetected = patternDetected || dictionaryDetected;
 
     console.log("LOCAL DETECTED:", localDetected);
+
 
 
     // ИИ анализирует смысл и контекст сообщения
