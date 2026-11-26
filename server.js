@@ -110,93 +110,112 @@ function normalizeText(text) {
         .replace(/(.)\1+/g, '$1');
 }
 
-// Проверка токсичности
+
 async function checkTextToxicity(userText) {
     const startTime = Date.now();
-
     const cleanText = normalizeText(userText);
-    const noSpacesText = cleanText.replace(/\s+/g, '');
-    const wordsArray = cleanText.split(/\s+/);
 
-    // Локальная проверка
-    let isToxicLocal = baseTriggers.some(word =>
-        cleanText.includes(word) ||
-        noSpacesText.includes(word)
+    // Проверяем направленные оскорбления и травлю
+    const hatePatterns = [
+        /\bi hate you\b/i,
+        /\byou are (stupid|ugly|worthless|pathetic)\b/i,
+        /\bnobody likes you\b/i,
+        /\bgo away\b/i,
+        /\bshut up\b/i,
+        /\byou are a loser\b/i,
+        /\bkill yourself\b/i,
+        /\bты (тупой|тупая|урод|уродина|ничтожество)\b/i,
+        /\bникому ты не нужен\b/i,
+        /\bтебя никто не любит\b/i,
+        /\bзаткнись\b/i,
+        /\bсен (ақымақ|керексізсің)\b/i
+    ];
+
+    const localDetected = hatePatterns.some(pattern =>
+        pattern.test(cleanText)
     );
 
-    if (!isToxicLocal) {
-        isToxicLocal = wordsArray.some(word =>
-            word.length >= 4 &&
-            dynamicDictionary.has(word)
-        );
-    }
-
-    // Анализ через OpenAI
+    // ИИ анализирует смысл и контекст сообщения
     if (openai) {
         try {
             const response = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
                 temperature: 0.1,
-
+                response_format: { type: "json_object" },
                 messages: [
                     {
                         role: "system",
-                        content:
-                            "Ты — ИИ-модератор Aigis Shield. " +
-                            "Выявляй кибербуллинг и токсичность " +
-                            "на русском, казахском и английском языках, " +
-                            "включая сленг и обфускацию. " +
-                            "Отвечай строго в формате JSON: " +
-                            "{\"toxic\": boolean, \"score\": number, " +
-                            "\"category\": \"категория\", " +
-                            "\"reason\": \"краткая причина на русском\"}."
+                        content: `
+Ты — Aigis AI Shield, интеллектуальная система
+обнаружения кибербуллинга.
+
+Анализируй сообщения на русском, казахском и английском.
+
+Обнаруживай:
+- прямые оскорбления;
+- унижение и насмешки;
+- травлю и запугивание;
+- угрозы;
+- дискриминационные высказывания;
+- завуалированные оскорбления;
+- агрессивные фразы, направленные против конкретного человека;
+- сленг, сокращения и намеренно изменённое написание.
+
+Учитывай контекст и адресата.
+Не считай автоматически хейтом обычное выражение
+негативных эмоций, например "I hate homework".
+
+Если человек оскорбляет другого — toxic: true.
+Если сообщение безопасно — toxic: false.
+
+Верни строго JSON:
+{
+  "toxic": true,
+  "score": 0.95,
+  "category": "Cyberbullying",
+  "reason": "Краткое объяснение на русском"
+}
+`
                     },
                     {
                         role: "user",
                         content: userText
                     }
-                ],
-
-                response_format: {
-                    type: "json_object"
-                }
+                ]
             });
 
             const result = JSON.parse(
                 response.choices[0].message.content
             );
 
-            result.latency = Date.now() - startTime;
+            // Объединяем результаты ИИ и локальной проверки
+            if (localDetected) {
+                result.toxic = true;
+                result.score = Math.max(result.score || 0, 0.90);
+                result.category = "Cyberbullying / Hate Speech";
+                result.reason =
+                    "Обнаружено направленное оскорбление";
+            }
 
+            result.latency = Date.now() - startTime;
             return result;
 
-        } catch (err) {
-            console.error(
-                "Fallback to hybrid NLP dictionary:",
-                err.message
-            );
+        } catch (error) {
+            console.error("AI analysis error:", error.message);
         }
     }
 
-    // Гибридный движок
-    const latency = Math.max(Date.now() - startTime, 8);
-
-    if (isToxicLocal) {
-        return {
-            toxic: true,
-            score: 0.97,
-            category: "Cyberbullying / Hate Speech (KZ-RU-EN)",
-            reason: "Обнаружена токсичная лексика или завуалированное оскорбление",
-            latency
-        };
-    }
-
+    // Резервный режим, если ИИ недоступен
     return {
-        toxic: false,
-        score: 0.03,
-        category: "Safe Content",
-        reason: "Нарушений не обнаружено",
-        latency
+        toxic: localDetected,
+        score: localDetected ? 0.90 : 0.03,
+        category: localDetected
+            ? "Cyberbullying"
+            : "Safe Content",
+        reason: localDetected
+            ? "Обнаружено потенциальное оскорбление"
+            : "Нарушений не обнаружено",
+        latency: Date.now() - startTime
     };
 }
 
