@@ -11,29 +11,33 @@ const tgBot = process.env.TELEGRAM_BOT_TOKEN ? new Telegraf(process.env.TELEGRAM
 const INSTAGRAM_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'bazar_jok_verify_secret';
 
 
+
 function normalizeText(text) {
     return text.toLowerCase()
         .replace(/[@4]/g, 'а')
-        .replace(/[0]/g, 'о')
-        .replace(/[3]/g, 'з')
+        .replace(/0/g, 'о')
+        .replace(/3/g, 'з')
         .replace(/[1!]/g, 'и')
         .replace(/[$5]/g, 'с')
-        .replace(/[^a-zа-яёәіңғүұқөһ0-9\s]/gi, '');
+        .replace(/[^a-zа-яёәіңғүұқөһ0-9\s]/gi, '')
+        .replace(/(.)\1+/g, '$1'); // Сжимает "дуууура" -> "дура", "лоооох" -> "лох"
 }
 
 async function checkTextToxicity(userText) {
     const startTime = Date.now();
     const cleanText = normalizeText(userText);
-
+    const noSpacesText = cleanText.replace(/\s+/g, ''); // Ловит "д у р а" -> "дура"
 
     const slangTriggers = [
         "мамбет", "котинди", "котак", "мал", "мыркымбай", "сынык", "катын", "щещен", "шешен",
         "дур", "туп", "дебил", "идиот", "лох", "мраз", "тварь", "урод", "сук", "бля", "пидр",
-        "сдохни", "убью", "ненавижу", "пошел на", "заткнись", "чмо", "даун", "клоун", "жирн"
+        "сдохни", "убью", "ненавижу", "пошелна", "заткнись", "чмо", "даун", "клоун", "жирн",
+        "stupid", "idiot", "loser", "kill yourself", "shut up", "bitch", "ugly"
     ];
 
-    const matchedTrigger = slangTriggers.find(word => cleanText.includes(word));
-
+    const matchedTrigger = slangTriggers.find(word => 
+        cleanText.includes(word) || noSpacesText.includes(word)
+    );
 
     if (openai) {
         try {
