@@ -42,7 +42,7 @@ const baseTriggers = [
 let dynamicDictionary = new Set(baseTriggers);
 let lastSyncTime = new Date().toLocaleTimeString('ru-RU');
 
-// Динамическое пополнение базы угроз
+// Динамическое пополнение базы угроз из открытых списков
 async function updateThreatIntelligence() {
     const externalSources = [
         'https://githubusercontent.com',
@@ -54,13 +54,10 @@ async function updateThreatIntelligence() {
     for (const url of externalSources) {
         try {
             const response = await fetch(url);
-
             if (response.ok) {
                 const text = await response.text();
-
                 const words = text.split('\n')
-                    .map(w => w.trim().toLowerCase()
-                        .replace(/[^a-zа-яё0-9]/gi, ''))
+                    .map(w => w.trim().toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''))
                     .filter(w => w.length >= 4);
 
                 words.forEach(w => {
@@ -71,18 +68,12 @@ async function updateThreatIntelligence() {
                 });
             }
         } catch (err) {
-            console.error(
-                `Ошибка загрузки базы из ${url}:`,
-                err.message
-            );
+            console.error(`Ошибка загрузки базы из ${url}:`, err.message);
         }
     }
 
     lastSyncTime = new Date().toLocaleTimeString('ru-RU');
-
-    console.log(
-        `🔄 База угроз Aigis обновлена! Всего паттернов: ${dynamicDictionary.size} (+${addedCount} новых)`
-    );
+    console.log(`🔄 База угроз Aigis обновлена! Всего паттернов: ${dynamicDictionary.size} (+${addedCount} новых)`);
 
     return {
         total: dynamicDictionary.size,
@@ -92,11 +83,7 @@ async function updateThreatIntelligence() {
 
 // Обновление базы при запуске и каждые 24 часа
 updateThreatIntelligence();
-
-setInterval(
-    updateThreatIntelligence,
-    24 * 60 * 60 * 1000
-);
+setInterval(updateThreatIntelligence, 24 * 60 * 60 * 1000);
 
 // Нормализация текста
 function normalizeText(text) {
@@ -110,43 +97,45 @@ function normalizeText(text) {
         .replace(/(.)\1+/g, '$1');
 }
 
-
 async function checkTextToxicity(userText) {
     const startTime = Date.now();
     const cleanText = normalizeText(userText);
+    const wordsArray = cleanText.split(/\s+/);
+
     console.log("ORIGINAL:", userText);
-console.log("NORMALIZED:", cleanText);
+    console.log("NORMALIZED:", cleanText);
 
-  const hatePatterns = [
-    // Английский
-    /\bi hate you\b/i,
-    /\byou are (stupid|ugly|worthless|pathetic)\b/i,
-    /\bnobody likes you\b/i,
-    /\bgo away\b/i,
-    /\bshut up\b/i,
-    /\byou are a loser\b/i,
+    const hatePatterns = [
+        // Английский (с учётом контекста — не блокирует "I hate homework")
+        /\bi hate you\b/i,
+        /\byou are (stupid|ugly|worthless|pathetic|a loser|an idiot|a moron)\b/i,
+        /\bnobody likes you\b/i,
+        /\bgo away\b/i,
+        /\bshut up\b/i,
+        /\bkill yourself\b/i,
 
-    // Русский: прямые оскорбления
-    /\bты\s+(тупой|тупая|тупое|урод|уродина|ничтожество)\b/i,
-    /\b(тупой|тупая|тупое|тупым|тупыми)\b/i,
-    /\b(идиот|идиотка|дебил|дебилка|придурок|кретин)\b/i,
-    /\bникому ты не нужен\b/i,
-    /\bтебя никто не любит\b/i,
-    /\bзаткнись\b/i,
+        // Русский
+        /\bты\s+(тупой|тупая|тупое|урод|уродина|ничтожество|дура|дурак)\b/i,
+        /\b(тупой|тупая|тупое|тупым|тупыми)\b/i,
+        /\b(идиот|идиотка|дебил|дебилка|придурок|кретин)\b/i,
+        /\bникому ты не нужен\b/i,
+        /\bтебя никто не любит\b/i,
+        /\bзаткнись\b/i,
 
-    // Казахский
-    /\bсен\s+(ақымақ|керексізсің)\b/i,
-    /\bақымақ\b/i
-];
+        // Казахский
+        /\bсен\s+(ақымақ|керексізсің|малсың)\b/i,
+        /\b(ақымақ|мал|көтіңді|қотақбас)\b/i
+    ];
 
-    const localDetected = hatePatterns.some(pattern =>
-    pattern.test(cleanText)
-);
+    // Проверяем и фразовые паттерны, и слова из динамического словаря (включая подгруженные из сети)
+    const patternDetected = hatePatterns.some(pattern => pattern.test(cleanText));
+    const dictionaryDetected = wordsArray.some(word => word.length >= 4 && dynamicDictionary.has(word)) ||
+                               baseTriggers.some(trigger => trigger.length >= 4 && cleanText.includes(trigger));
 
-console.log(
-    "LOCAL DETECTED:",
-    localDetected
-);
+    const localDetected = patternDetected || dictionaryDetected;
+
+    console.log("LOCAL DETECTED:", localDetected);
+
 
     // ИИ анализирует смысл и контекст сообщения
     if (openai) {
