@@ -196,12 +196,20 @@ async function checkTextToxicity(userText) {
 
             // Объединяем результаты ИИ и локальной проверки
             if (localDetected) {
-                result.toxic = true;
-                result.score = Math.max(result.score || 0, 0.90);
-                result.category = "Cyberbullying / Hate Speech";
-                result.reason =
-                    "Обнаружено направленное оскорбление";
-            }
+    result.toxic = true;
+    result.score = Math.max(
+        Number(result.score) || 0,
+        0.90
+    );
+    result.category = "Cyberbullying / Hate Speech";
+    result.reason = "Обнаружено потенциальное оскорбление";
+}
+
+result.toxic = Boolean(result.toxic);
+result.score = Math.max(
+    0,
+    Math.min(1, Number(result.score) || 0)
+);
 
             result.latency = Date.now() - startTime;
             return result;
