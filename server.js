@@ -114,6 +114,8 @@ function normalizeText(text) {
 async function checkTextToxicity(userText) {
     const startTime = Date.now();
     const cleanText = normalizeText(userText);
+    console.log("ORIGINAL:", userText);
+console.log("NORMALIZED:", cleanText);
 
   const hatePatterns = [
     // Английский
@@ -138,8 +140,13 @@ async function checkTextToxicity(userText) {
 ];
 
     const localDetected = hatePatterns.some(pattern =>
-        pattern.test(cleanText)
-    );
+    pattern.test(cleanText)
+);
+
+console.log(
+    "LOCAL DETECTED:",
+    localDetected
+);
 
     // ИИ анализирует смысл и контекст сообщения
     if (openai) {
