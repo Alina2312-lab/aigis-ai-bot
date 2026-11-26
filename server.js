@@ -115,21 +115,27 @@ async function checkTextToxicity(userText) {
     const startTime = Date.now();
     const cleanText = normalizeText(userText);
 
-    // Проверяем направленные оскорбления и травлю
-    const hatePatterns = [
-        /\bi hate you\b/i,
-        /\byou are (stupid|ugly|worthless|pathetic)\b/i,
-        /\bnobody likes you\b/i,
-        /\bgo away\b/i,
-        /\bshut up\b/i,
-        /\byou are a loser\b/i,
-        /\bkill yourself\b/i,
-        /\bты (тупой|тупая|урод|уродина|ничтожество)\b/i,
-        /\bникому ты не нужен\b/i,
-        /\bтебя никто не любит\b/i,
-        /\bзаткнись\b/i,
-        /\bсен (ақымақ|керексізсің)\b/i
-    ];
+  const hatePatterns = [
+    // Английский
+    /\bi hate you\b/i,
+    /\byou are (stupid|ugly|worthless|pathetic)\b/i,
+    /\bnobody likes you\b/i,
+    /\bgo away\b/i,
+    /\bshut up\b/i,
+    /\byou are a loser\b/i,
+
+    // Русский: прямые оскорбления
+    /\bты\s+(тупой|тупая|тупое|урод|уродина|ничтожество)\b/i,
+    /\b(тупой|тупая|тупое|тупым|тупыми)\b/i,
+    /\b(идиот|идиотка|дебил|дебилка|придурок|кретин)\b/i,
+    /\bникому ты не нужен\b/i,
+    /\bтебя никто не любит\b/i,
+    /\bзаткнись\b/i,
+
+    // Казахский
+    /\bсен\s+(ақымақ|керексізсің)\b/i,
+    /\bақымақ\b/i
+];
 
     const localDetected = hatePatterns.some(pattern =>
         pattern.test(cleanText)
