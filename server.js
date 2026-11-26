@@ -193,4 +193,5 @@ app.get('/webhook/instagram', (req, res) => {
     else res.sendStatus(403);
 });
 
-app.listen(PORT, () => { console.log(\`🚀 Сервер Aigis запущен на порту \${PORT}\`); });
+app.listen(PORT, () => { console.log(`🚀 Сервер Aigis запущен на порту ${PORT}`); });
+
