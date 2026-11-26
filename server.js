@@ -1,50 +1,68 @@
-p='/mnt/data/Вставленный Markdown(1).md'
-with open(p,encoding='utf-8') as f:
-    s=f.read()
-print(s[:30000])
-```
+
 const express = require('express');
 const { OpenAI } = require('openai');
 const { Telegraf } = require('telegraf');
 
 const app = express();
 app.use(express.json());
+
 const PORT = process.env.PORT || 3000;
 
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const tgBot = process.env.TELEGRAM_BOT_TOKEN ? new Telegraf(process.env.TELEGRAM_BOT_TOKEN) : null;
-const INSTAGRAM_VERIFY_TOKEN = process.env.INSTAGRAM_VERIFY_TOKEN || 'bazar_jok_verify_secret';
+const openai = process.env.OPENAI_API_KEY
+    ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    : null;
 
-// Базовый словарь (KZ + RU + EN кибербуллинг и токсичный сленг)
+const tgBot = process.env.TELEGRAM_BOT_TOKEN
+    ? new Telegraf(process.env.TELEGRAM_BOT_TOKEN)
+    : null;
+
+const INSTAGRAM_VERIFY_TOKEN =
+    process.env.INSTAGRAM_VERIFY_TOKEN || 'bazar_jok_verify_secret';
+
+// Базовый словарь (KZ + RU + EN)
 const baseTriggers = [
-    // KZ & RU локальный сленг и оскорбления
-    "мамбет", "котинди", "котак", "мал", "мыркымбай", "сынык", "катын", "щещен", "шешен",
-    "дур", "туп", "дебил", "идиот", "лох", "мраз", "тварь", "урод", "сук", "бля", "пидр",
-    "сдохни", "убью", "ненавижу", "пошелна", "заткнись", "чмо", "даун", "клоун", "жирн",
-    // EN оскорбления, буллинг и токсичные сокращения
-    "stupid", "idiot", "loser", "kys", "killyourself", "stfu", "shutup", "bitch", "ugly",
-    "moron", "retard", "freak", "pathetic", "worthless", "trash", "dumbass", "asshole",
-    "fuck", "shit", "bastard", "slut", "whore", "cunt", "dick", "faggot", "nigger", "gtfo"
+    // KZ & RU
+    "мамбет", "котинди", "котак", "мал", "мыркымбай",
+    "сынык", "катын", "щещен", "шешен",
+    "дур", "туп", "дебил", "идиот", "лох", "мраз",
+    "тварь", "урод", "сук", "бля", "пидр",
+    "сдохни", "убью", "ненавижу", "пошелна",
+    "заткнись", "чмо", "даун", "клоун", "жирн",
+
+    // EN
+    "stupid", "idiot", "loser", "kys",
+    "killyourself", "stfu", "shutup", "bitch",
+    "ugly", "moron", "retard", "freak",
+    "pathetic", "worthless", "trash", "dumbass",
+    "asshole", "fuck", "shit", "bastard",
+    "slut", "whore", "cunt", "dick",
+    "faggot", "nigger", "gtfo"
 ];
 
 let dynamicDictionary = new Set(baseTriggers);
 let lastSyncTime = new Date().toLocaleTimeString('ru-RU');
 
-// Функция динамического пополнения базы угроз из открытых источников (GitHub / Open Threat Intelligence)
+// Динамическое пополнение базы угроз
 async function updateThreatIntelligence() {
     const externalSources = [
         'https://githubusercontent.com',
         'https://githubusercontent.com'
     ];
+
     let addedCount = 0;
+
     for (const url of externalSources) {
         try {
             const response = await fetch(url);
+
             if (response.ok) {
                 const text = await response.text();
+
                 const words = text.split('\n')
-                    .map(w => w.trim().toLowerCase().replace(/[^a-zа-яё0-9]/gi, ''))
-                    .filter(w => w.length >= 4); // Берём слова от 4 букв, чтобы избежать ложных срабатываний
+                    .map(w => w.trim().toLowerCase()
+                        .replace(/[^a-zа-яё0-9]/gi, ''))
+                    .filter(w => w.length >= 4);
+
                 words.forEach(w => {
                     if (!dynamicDictionary.has(w)) {
                         dynamicDictionary.add(w);
@@ -53,19 +71,34 @@ async function updateThreatIntelligence() {
                 });
             }
         } catch (err) {
-            console.error(`Ошибка загрузки базы из ${url}:`, err.message);
+            console.error(
+                `Ошибка загрузки базы из ${url}:`,
+                err.message
+            );
         }
     }
+
     lastSyncTime = new Date().toLocaleTimeString('ru-RU');
-    console.log(`🔄 База угроз Aigis обновлена! Всего паттернов: ${dynamicDictionary.size} (+${addedCount} новых)`);
-    return { total: dynamicDictionary.size, added: addedCount };
+
+    console.log(
+        `🔄 База угроз Aigis обновлена! Всего паттернов: ${dynamicDictionary.size} (+${addedCount} новых)`
+    );
+
+    return {
+        total: dynamicDictionary.size,
+        added: addedCount
+    };
 }
 
-// Запускаем первичное обновление при старте сервера и далее каждые 24 часа
+// Обновление базы при запуске и каждые 24 часа
 updateThreatIntelligence();
-setInterval(updateThreatIntelligence, 24 * 60 * 60 * 1000);
 
-// Нормализация текста (убираем подмену букв, растянутые гласные и пробелы)
+setInterval(
+    updateThreatIntelligence,
+    24 * 60 * 60 * 1000
+);
+
+// Нормализация текста
 function normalizeText(text) {
     return text.toLowerCase()
         .replace(/[@4]/g, 'а')
@@ -77,43 +110,77 @@ function normalizeText(text) {
         .replace(/(.)\1+/g, '$1');
 }
 
+// Проверка токсичности
 async function checkTextToxicity(userText) {
     const startTime = Date.now();
+
     const cleanText = normalizeText(userText);
     const noSpacesText = cleanText.replace(/\s+/g, '');
     const wordsArray = cleanText.split(/\s+/);
 
-    // 1. Проверка по локальному ядру сленга (подстроки) и внешней динамической базе (точные слова)
-    let isToxicLocal = baseTriggers.some(word => cleanText.includes(word) || noSpacesText.includes(word));
+    // Локальная проверка
+    let isToxicLocal = baseTriggers.some(word =>
+        cleanText.includes(word) ||
+        noSpacesText.includes(word)
+    );
+
     if (!isToxicLocal) {
-        isToxicLocal = wordsArray.some(word => word.length >= 4 && dynamicDictionary.has(word));
+        isToxicLocal = wordsArray.some(word =>
+            word.length >= 4 &&
+            dynamicDictionary.has(word)
+        );
     }
 
-    // 2. Попытка глубокого контекстного анализа через LLM (OpenAI)
+    // Анализ через OpenAI
     if (openai) {
         try {
             const response = await openai.chat.completions.create({
                 model: "gpt-4o-mini",
                 temperature: 0.1,
+
                 messages: [
                     {
                         role: "system",
-                        content: "Ты — ИИ-модератор 'Aigis Shield'. Выявляй кибербуллинг и токсичность на русском, казахском и английском языках (включая сленг и обфускацию). Отвечай СТРОГО в формате JSON: {\"toxic\": boolean, \"score\": number (0.00-1.00), \"category\": \"категория\", \"reason\": \"краткая причина на русском\"}."
+                        content:
+                            "Ты — ИИ-модератор Aigis Shield. " +
+                            "Выявляй кибербуллинг и токсичность " +
+                            "на русском, казахском и английском языках, " +
+                            "включая сленг и обфускацию. " +
+                            "Отвечай строго в формате JSON: " +
+                            "{\"toxic\": boolean, \"score\": number, " +
+                            "\"category\": \"категория\", " +
+                            "\"reason\": \"краткая причина на русском\"}."
                     },
-                    { role: "user", content: userText }
+                    {
+                        role: "user",
+                        content: userText
+                    }
                 ],
-                response_format: { type: "json_object" }
+
+                response_format: {
+                    type: "json_object"
+                }
             });
-            const result = JSON.parse(response.choices.message.content);
+
+            const result = JSON.parse(
+                response.choices[0].message.content
+            );
+
             result.latency = Date.now() - startTime;
+
             return result;
+
         } catch (err) {
-            console.error("Fallback to hybrid NLP dictionary:", err.message);
+            console.error(
+                "Fallback to hybrid NLP dictionary:",
+                err.message
+            );
         }
     }
 
-    // 3. Гибридный движок (срабатывает мгновенно)
+    // Гибридный движок
     const latency = Math.max(Date.now() - startTime, 8);
+
     if (isToxicLocal) {
         return {
             toxic: true,
@@ -133,40 +200,56 @@ async function checkTextToxicity(userText) {
     };
 }
 
-// ЛОГИКА ДЛЯ TELEGRAM
+// ЛОГИКА TELEGRAM
 if (tgBot) {
+
     tgBot.start((ctx) => {
         ctx.reply(
             `🛡️ <b>Aigis AI Shield</b> активирован!\n\n` +
             `• Поддержка языков: <b>RU / KZ / EN</b>\n` +
-            `• Активная база паттернов: <b>${dynamicDictionary.size}</b> (обновлено в ${lastSyncTime})\n\n` +
-            `Отправь любое сообщение для теста или используй /sync для обновления базы угроз из сети.`,
+            `• Активная база паттернов: <b>${dynamicDictionary.size}</b> ` +
+            `(обновлено в ${lastSyncTime})\n\n` +
+            `Отправь любое сообщение для теста или используй /sync ` +
+            `для обновления базы угроз из сети.`,
             { parse_mode: 'HTML' }
         );
     });
 
+    // Команда синхронизации
     tgBot.command('sync', async (ctx) => {
-        const msg = await ctx.reply('🔄 Синхронизация с открытыми базами токсичности...');
+        const msg = await ctx.reply(
+            '🔄 Синхронизация с открытыми базами токсичности...'
+        );
+
         const stats = await updateThreatIntelligence();
+
         await ctx.telegram.editMessageText(
             ctx.chat.id,
             msg.message_id,
             null,
-            `✅ <b>База угроз Aigis успешно обновлена!</b>\n• Всего активных паттернов: <b>${stats.total}</b>\n• Загружено новых из сети: <b>+${stats.added}</b>`,
+            `✅ <b>База угроз Aigis успешно обновлена!</b>\n` +
+            `• Всего активных паттернов: <b>${stats.total}</b>\n` +
+            `• Загружено новых из сети: <b>+${stats.added}</b>`,
             { parse_mode: 'HTML' }
         );
     });
 
+    // Проверка сообщений
     tgBot.on('text', async (ctx) => {
         const text = ctx.message.text;
+
         if (text.startsWith('/')) return;
 
         const analysis = await checkTextToxicity(text);
 
         if (analysis.toxic) {
+
             if (ctx.chat.type !== 'private') {
-                try { await ctx.deleteMessage(); } catch (e) {}
+                try {
+                    await ctx.deleteMessage();
+                } catch (e) {}
             }
+
             await ctx.reply(
                 `🚨 <b>[Aigis Shield]: Сообщение заблокировано!</b>\n` +
                 `• <b>Причина:</b> ${analysis.reason}\n` +
@@ -175,7 +258,9 @@ if (tgBot) {
                 `• <b>Скорость анализа:</b> ${analysis.latency} мс`,
                 { parse_mode: 'HTML' }
             );
+
         } else {
+
             await ctx.reply(
                 `✨ <b>[Aigis Shield]: Сообщение безопасное</b>\n` +
                 `• <b>Индекс токсичности:</b> ${analysis.score.toFixed(2)}\n` +
@@ -185,88 +270,258 @@ if (tgBot) {
         }
     });
 
-    tgBot.launch().then(() => console.log("🤖 Telegram-бот Aigis успешно запущен!"));
+    tgBot.launch().then(() => {
+        console.log("🤖 Telegram-бот Aigis успешно запущен!");
+    });
 }
 
-// REST API ДЛЯ ВНЕШНИХ ПРИЛОЖЕНИЙ (ВНЕ TELEGRAM)
+// REST API ДЛЯ ВНЕШНИХ ПРИЛОЖЕНИЙ
 app.post('/api/moderate', async (req, res) => {
     const { text } = req.body;
-    if (!text) return res.status(400).json({ error: 'Text is required' });
-    const result = await checkTextToxicity(text);
-    res.json(result);
+
+    if (!text) {
+        return res.status(400).json({
+            error: 'Text is required'
+        });
+    }
+
+    try {
+        const result = await checkTextToxicity(text);
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+
+        res.status(500).json({
+            error: 'Internal server error'
+        });
+    }
 });
 
-// ВЕБ-СТЕНД ДЛЯ ДЕМОНСТРАЦИИ ЖЮРИ В БРАУЗЕРЕ
+// ВЕБ-СТЕНД ДЛЯ ДЕМОНСТРАЦИИ
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Aigis AI Shield — Live Cybersecurity Demo</title>
+
     <style>
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 16px; max-width: 540px; width: 100%; padding: 30px; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-        .badge { display: inline-block; background: #2563eb; color: #fff; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 20px; margin-bottom: 12px; }
-        h1 { margin: 0 0 8px; font-size: 26px; }
-        p { color: #94a3b8; font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
-        textarea { width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #475569; border-radius: 10px; color: #fff; padding: 14px; font-size: 15px; resize: vertical; min-height: 90px; outline: none; }
-        textarea:focus { border-color: #38bdf8; }
-        button { width: 100%; margin-top: 14px; background: linear-gradient(135deg, #2563eb, #0284c7); color: white; border: none; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; }
-        button:hover { opacity: 0.92; }
-        .result { margin-top: 20px; padding: 16px; border-radius: 10px; display: none; font-size: 14px; line-height: 1.6; }
-        .toxic { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; }
-        .safe { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #86efac; }
-        .meta { margin-top: 16px; font-size: 12px; color: #64748b; text-align: center; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            max-width: 540px;
+            width: 100%;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
+
+        .badge {
+            display: inline-block;
+            background: #2563eb;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 26px;
+        }
+
+        p {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+
+        textarea {
+            width: 100%;
+            box-sizing: border-box;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 10px;
+            color: #fff;
+            padding: 14px;
+            font-size: 15px;
+            resize: vertical;
+            min-height: 90px;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: #38bdf8;
+        }
+
+        button {
+            width: 100%;
+            margin-top: 14px;
+            background: linear-gradient(135deg, #2563eb, #0284c7);
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        button:hover {
+            opacity: 0.92;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 10px;
+            display: none;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .toxic {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+        }
+
+        .safe {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid #22c55e;
+            color: #86efac;
+        }
+
+        .meta {
+            margin-top: 16px;
+            font-size: 12px;
+            color: #64748b;
+            text-align: center;
+        }
     </style>
 </head>
+
 <body>
 
-```
+    <div class="card">
 
+        <div class="badge">
+            KIMEP AI CHALLENGE 2026 • CYBERSECURITY
+        </div>
 
-KIMEP AI CHALLENGE 2026 • CYBERSECURITY\
-🛡️ Aigis AI Shield
+        <h1>🛡️ Aigis AI Shield</h1>
 
-Интеллектуальная система модерации кибербуллинга в реальном времени (RU / KZ / EN). Протестируйте ИИ-движок в браузере или в Telegram: @Aigisshieldbot
+        <p>
+            Интеллектуальная система модерации кибербуллинга
+            в реальном времени (RU / KZ / EN).
+            Протестируйте ИИ-движок в браузере или в Telegram:
+            @Aigisshieldbot
+        </p>
 
-Проверить сообщение через ИИ\
-\
-Активная база угроз: **${dynamicDictionary.size}** паттернов • Auto-Sync Active\
-\
-\
-async function check() {\
-const text = document.getElementById('msg').value.trim();\
-if (!text) return;\
-const resBox = document.getElementById('res');\
-resBox.style.display = 'block';\
-resBox.className = 'result';\
-resBox.innerHTML = '⏳ Анализ текста нейросетью Aigis...';\
-const r = await fetch('/api/moderate', {\
-method: 'POST',\
-headers: { 'Content-Type': 'application/json' },\
-body: JSON.stringify({ text })\
-});\
-const data = await r.json();\
-if (data.toxic) {\
-resBox.className = 'result toxic';\
-resBox.innerHTML = '🚨 **ЗАБЛОКИРОВАНО (Кибербуллинг)**\
-Причина: ' + data.reason + '\
-Индекс токсичности: **' + data.score + '** | Задержка: **' + data.latency + ' мс**';\
-} else {\
-resBox.className = 'result safe';\
-resBox.innerHTML = '✨ **БЕЗОПАСНОЕ СООБЩЕНИЕ**\
-Индекс токсичности: **' + data.score + '** | Задержка: **' + data.latency + ' мс**';\
-}\
-}\
-\
-\
-\`);\
+        <textarea
+            id="msg"
+            placeholder="Введите сообщение для проверки..."
+        ></textarea>
+
+        <button onclick="check()">
+            Проверить сообщение через ИИ
+        </button>
+
+        <div id="res" class="result"></div>
+
+        <div class="meta">
+            Активная база угроз: ${dynamicDictionary.size}
+            паттернов • Auto-Sync Active
+        </div>
+
+    </div>
+
+    <script>
+        async function check() {
+            const text = document.getElementById('msg').value.trim();
+
+            if (!text) return;
+
+            const resBox = document.getElementById('res');
+
+            resBox.style.display = 'block';
+            resBox.className = 'result';
+            resBox.textContent = '⏳ Анализ текста нейросетью Aigis...';
+
+            try {
+                const r = await fetch('/api/moderate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+
+                const data = await r.json();
+
+                if (!r.ok) {
+                    throw new Error(data.error || 'Ошибка сервера');
+                }
+
+                if (data.toxic) {
+                    resBox.className = 'result toxic';
+
+                    resBox.textContent =
+                        '🚨 ЗАБЛОКИРОВАНО (Кибербуллинг)\\n' +
+                        'Причина: ' + data.reason + '\\n' +
+                        'Индекс токсичности: ' + data.score +
+                        ' | Задержка: ' + data.latency + ' мс';
+
+                } else {
+                    resBox.className = 'result safe';
+
+                    resBox.textContent =
+                        '✨ БЕЗОПАСНОЕ СООБЩЕНИЕ\\n' +
+                        'Индекс токсичности: ' + data.score +
+                        ' | Задержка: ' + data.latency + ' мс';
+                }
+
+            } catch (error) {
+                resBox.className = 'result toxic';
+                resBox.textContent =
+                    'Ошибка проверки: ' + error.message;
+            }
+        }
+    </script>
+
+</body>
+</html>`);
 });
 
-app.get('/webhook/instagram', (req, res) => {\
-if (req.query['hub.verify_token'] === INSTAGRAM_VERIFY_TOKEN) res.status(200).send(req.query['hub.challenge']);\
-else res.sendStatus(403);\
+// INSTAGRAM WEBHOOK: ПОДТВЕРЖДЕНИЕ
+app.get('/webhook/instagram', (req, res) => {
+    if (
+        req.query['hub.verify_token'] === INSTAGRAM_VERIFY_TOKEN
+    ) {
+        res.status(200).send(req.query['hub.challenge']);
+    } else {
+        res.sendStatus(403);
+    }
 });
 
-app.listen(PORT, () => { console.log("Server Aigis started on port " + PORT); });
+// ЗАПУСК СЕРВЕРА
+app.listen(PORT, () => {
+    console.log("Server Aigis started on port " + PORT);
+});
